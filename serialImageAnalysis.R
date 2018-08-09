@@ -10,7 +10,23 @@ teamDriveDownload <- function(team.drive.name, folder.name){
     lapply(folder.files$id, function(x) drive_download(as_id(x),overwrite = T))
 }
 
-binning.jpeg  <- function(dir,bin.length.sec=3600,frame.interval.sec = 10,dir.out="bins"){
+#function to drop rows & columns in data frame
+dropRowsCols <- function(img, drop.rows=NA, drop.cols=NA){
+    #drop.rows and drop.cols is list of row or col numbers to be dropped form dataframe
+    ifelse(test = !is.na(drop.rows),
+           img <- img[-c(drop.rows),],
+           print("no rows dropped")
+    )
+    ifelse(test = !is.na(drop.cols),
+           img <- img[ ,-c(drop.cols)],
+           print("no columns dropped")
+    )
+    t(img)
+}
+
+binning.jpeg  <- function(
+    dir, bin.length.sec=3600, frame.interval.sec = 10,
+    dir.out="bins", drop.rows=NA, drop.cols=NA, height.px=100) {
     # load package, add download if not there
     if (!"EBImage" %in% rownames(installed.packages())) {
         source("http://bioconductor.org/biocLite.R")
@@ -19,7 +35,7 @@ binning.jpeg  <- function(dir,bin.length.sec=3600,frame.interval.sec = 10,dir.ou
     library(EBImage)
     
     #make list of file paths and make dirs
-    files  <- list.files(path = dir, pattern = "*.jpg",full.names = F)
+    files  <- list.files(path = dir, pattern = "*.jpg", full.names = F)
     dir.create("csv",showWarnings = FALSE)
     dir.create("delta",showWarnings = FALSE)
     dir.create(dir.out,showWarnings = FALSE)
@@ -27,12 +43,21 @@ binning.jpeg  <- function(dir,bin.length.sec=3600,frame.interval.sec = 10,dir.ou
     print("----------   Converting JPEGs to CSVs   ----------")
     p <- i  <- 0
     for (file in files) {
-        img <- as.array(resize(channel(readImage(paste0(dir,file),type = "jpeg"),"gray"),h = 100))
+        img <- as.array(
+            resize(
+                dropRowsCols(
+                    channel(readImage(paste0(dir,file),
+                                      type = "jpeg"),"gray"
+                    ),
+                    drop.rows=drop.rows,drop.cols=drop.cols
+                ), h = height.px
+            )
+        )
         write.csv(img,file=paste0("csv/",file))
         i  <- i + 1
         p  <- (i/length(files))*100
         print(paste0(dir,file," - ",round(p,2),"%"))
-     }
+    }
     print(" ")
     print("----------   Generating Differences Matrices    ----------")
     delta <- files[-1]
@@ -60,7 +85,7 @@ binning.jpeg  <- function(dir,bin.length.sec=3600,frame.interval.sec = 10,dir.ou
     #bin.number.char <-  sprintf(paste0("%0",max(nchar(bin.number)),"d"), bin.number)
     print("----------   Adding Matrices and Saving     ----------")
     print(paste0("bin - start - finish"))
-    delta <- list.files("delta/",pattern = "*.jpg",full.names = FALSE)
+    delta <- list.files("delta/",pattern = "*.jpg", full.names = FALSE)
     for (bin in bin.number) {
         start  <- as.numeric((bin-1)*frames.per.bin+1)
         finish <- bin*frames.per.bin
@@ -84,7 +109,9 @@ binning.jpeg  <- function(dir,bin.length.sec=3600,frame.interval.sec = 10,dir.ou
     }
 }
 
-binning.png  <- function(dir,bin.length.sec=3600,frame.interval.sec = 10,dir.out="bins"){
+binning.png  <- function(
+    dir, bin.length.sec=3600, frame.interval.sec = 10,
+    dir.out="bins", drop.rows=NA, drop.cols=NA, height.px=100) {
     # load package, add download if not there
     if (!"EBImage" %in% rownames(installed.packages())) {
         source("http://bioconductor.org/biocLite.R")
@@ -93,7 +120,7 @@ binning.png  <- function(dir,bin.length.sec=3600,frame.interval.sec = 10,dir.out
     library(EBImage)
     
     #make list of file paths and make dirs
-    files  <- list.files(path = dir, pattern = "*.png",full.names = F)
+    files  <- list.files(path = dir, pattern = "*.png", full.names = F)
     dir.create("csv",showWarnings = FALSE)
     dir.create("delta",showWarnings = FALSE)
     dir.create(dir.out,showWarnings = FALSE)
@@ -101,7 +128,16 @@ binning.png  <- function(dir,bin.length.sec=3600,frame.interval.sec = 10,dir.out
     print("----------   Converting PNGs to CSVs   ----------")
     p <- i  <- 0
     for (file in files) {
-        img <- as.array(resize(channel(readImage(paste0(dir,file),type = "png"),"gray"),h = 100))
+        img <- as.array(
+            resize(
+                dropRowsCols(
+                    channel(readImage(paste0(dir,file),
+                                      type = "png"),"gray"
+                    ),
+                    drop.rows=drop.rows,drop.cols=drop.cols
+                ), h = height.px
+            )
+        )
         write.csv(img,file=paste0("csv/",file))
         i  <- i + 1
         p  <- (i/length(files))*100
@@ -134,8 +170,7 @@ binning.png  <- function(dir,bin.length.sec=3600,frame.interval.sec = 10,dir.out
     #bin.number.char <-  sprintf(paste0("%0",max(nchar(bin.number)),"d"), bin.number)
     print("----------   Adding Matrices and Saving     ----------")
     print(paste0("bin - start - finish"))
-    delta <- list.files("delta/",pattern = "*.png",full.names = FALSE)
-    
+    delta <- list.files("delta/",pattern = "*.png", full.names = FALSE)
     for (bin in bin.number) {
         start  <- as.numeric((bin-1)*frames.per.bin+1)
         finish <- bin*frames.per.bin
@@ -144,11 +179,9 @@ binning.png  <- function(dir,bin.length.sec=3600,frame.interval.sec = 10,dir.out
             nrow=nrow(read.csv(paste0("delta/",delta[1]))),
             ncol=ncol(read.csv(paste0("delta/",delta[1])))
         ))
-        print(array)
-                for (number in start:finish){
+        for (number in start:finish){
             array <- array + read.csv(paste0("delta/",delta[number]))
         }
-        print("write tables")
         write.table(x=array, file = paste0(
             dir.out,"/","bin-",sprintf(paste0("%0",max(nchar(bin.number)),"d"), bin),
             ".frame-",start,"to",finish,".secs",bin.length.sec,".raw.csv"),
@@ -159,10 +192,10 @@ binning.png  <- function(dir,bin.length.sec=3600,frame.interval.sec = 10,dir.out
             sep = ",",row.names = F,col.names = F)
         print(paste0(" ",bin," -   ",start,"  -   ",finish))
     }
-    }
+}
 
 makeHeatmaps <- function(dir, bin.type = "zscore",
-    my.colors = c("black","purple","blue", "red","orange","yellow","white")
+    my.colors = c("black","purple","blue", "red","orange","yellow")
 ){
     # load package, add download if not there
     if (!"gplots" %in% rownames(installed.packages())) {
@@ -180,34 +213,24 @@ makeHeatmaps <- function(dir, bin.type = "zscore",
     pdf(file = paste0("heatmap.",bin.type,".pdf"),width = 11,height = 8.5)
     lapply(
         files,
-        function(x) {heatmap.2(t(data.matrix(read.csv(x,header = F)[,-1])),
-                               main = sub(dir,"",sub(paste0(".",bin.type,".csv"),"",x)), # heat map title
-                               density.info="none",  # turns off density plot inside color legend
-                               trace="none",         # turns off trace lines inside the heat map
-                               margins =c(12,9),     # widens margins around plot
-                               col=my.colors,       # use on color palette defined earlier
-                               # breaks=col_breaks,    # enable color transition at specified limits
-                               dendrogram="none",     # only draw a row dendrogram
-                               na.color="black",
-                               Rowv = FALSE,
-                               Colv=FALSE)            # turn off column clustering
+        function(x) {
+            heatmap.2(
+                
+                data.matrix(read.csv(x,header = F)[,-1]),
+                main = sub(dir,"",sub(paste0(".",bin.type,".csv"),"",x)), # heat map title
+                density.info="none",  # turns off density plot inside color legend
+                trace="none",         # turns off trace lines inside the heat map
+                margins =c(12,9),     # widens margins around plot
+                col=my.colors,       # use on color palette defined earlier
+                # breaks=col_breaks,    # enable color transition at specified limits
+                dendrogram="none",     # only draw a row dendrogram
+                na.color="black",
+                Rowv = FALSE,
+                Colv=FALSE
+            )            # turn off column clustering
         }
     )
     dev.off()
-}
-
-#function to drop rows & columns in data frame
-dropRowsCols <- function(img, drop.rows=NA, drop.cols=NA){
-    #drop.rows and drop.cols is list of row or col numbers to be dropped form dataframe
-    ifelse(test = !is.na(drop.rows),
-           img <- img[-c(drop.rows),],
-           print("no rows dropped")
-    )
-    ifelse(test = !is.na(drop.cols),
-           img <- img[ ,-c(drop.cols)],
-           print("no columns dropped")
-    )
-    img
 }
 
 # make function summing flexable number of bins
@@ -255,3 +278,4 @@ countFiles <- function(team.drive.name,folder.name){
 # need to make function to make graphs of activity automaticlly
 #consider changeing binning.jpeg and binning.png to add downsample resolution variable
 # rename to binningJPEG, binningPNG 
+
