@@ -1,3 +1,6 @@
+
+#### DOWNLOAD FOLDER OF FILES FROM GOOGLE TEAM DRIVE ############# ----
+
 teamDriveDownload <- function(team.drive.name, folder.name){
     if(!require("googledrive")) install.packages("googledrive")
     library(googledrive)
@@ -10,16 +13,27 @@ teamDriveDownload <- function(team.drive.name, folder.name){
     lapply(folder.files$id, function(x) drive_download(as_id(x),overwrite = T))
 }
 
+countFiles <- function(team.drive.name,folder.name){
+    q.search <- paste0("name contains '",folder.name,"'")
+    folder.id <- as.data.frame(
+        drive_find(team_drive = team.drive.name, q=q.search)$drive_resource,
+        stringsAsFactors = F)$id
+    folder.files <- drive_ls(as_id(folder.id))
+    length(folder.files$name)
+}
+
+#### PROCESSING IMAGES AFTER DOWNLOADING ############# ----
+
 #function to drop rows & columns in data frame
 dropRowsCols <- function(img, drop.rows=NA, drop.cols=NA){
     #drop.rows and drop.cols is list of row or col numbers to be dropped form dataframe
     ifelse(test = !is.na(drop.rows),
-           img <- img[-c(drop.rows),],
-           print("no rows dropped")
+        img <- img[-c(drop.rows),],
+        img <- img
     )
     ifelse(test = !is.na(drop.cols),
-           img <- img[ ,-c(drop.cols)],
-           print("no columns dropped")
+        img <- img[ ,-c(drop.cols)],
+        img <- img
     )
     t(img)
 }
@@ -194,8 +208,60 @@ binning.png  <- function(
     }
 }
 
+#### MAKE DATAFRAME SUMMERIZING CHANGE FROM FRAME TO FRAME ############# ----
+
+# sum rows or cols of data frame
+sumRowsOrCols <- function(img, bin.cols = TRUE, drop.rows=NA, drop.cols=NA){
+    ifelse(
+        bin.cols == TRUE,
+        bin.cols <- 1,
+        bin.cols <- 2
+    )
+    apply(
+        X = dropRowsCols(img = img, drop.rows = drop.rows, drop.cols = drop.cols),
+        MARGIN = bin.cols,
+        FUN = sum
+    )
+}
+
+# sums of AoIs in a single image
+AoIs <- function(img, numAoIs){
+    len <- length(img)
+    size <- round(len/numAoIs,0)
+    i1 <- NULL
+    i2 <- NULL
+    sapply(
+        1:numAoIs,
+        FUN =  function(x){
+            sum(img[sum((x-1)*size+1):(x*size)],na.rm = TRUE)
+        },simplify = TRUE
+    )
+}
+
+# output df of realitive movement in AoIs across time series
+seriesAoIs <- function( dir, pattern = ".raw.csv", numAoIs,
+                        bin.cols = TRUE, drop.rows=NA, drop.cols=NA) 
+{
+    images <- list.files(path = dir,pattern = pattern,full.names = T)
+    image.files <- lapply(images, read.csv, header = FALSE,sep = ",")
+    sapply(
+        images,
+        FUN =  function(x){
+            (AoIs(
+                sumRowsOrCols(
+                    img = t(img), bin.cols = bin.cols, 
+                    drop.rows = drop.rows, drop.cols = drop.cols
+                ),
+                numAoIs = numAoIs
+            ))
+        }
+    )
+}
+
+#### MAKE VISUALIZATIONS FROM ANALYZED SERIAL IMAGES ############# ----
+
 makeHeatmaps <- function(dir, bin.type = "zscore",
-    my.colors = c("black","purple","blue", "red","orange","yellow")
+                         my.colors = c("black","purple","blue", "red","orange","yellow")
 ){
     # load package, add download if not there
     if (!"gplots" %in% rownames(installed.packages())) {
@@ -233,49 +299,6 @@ makeHeatmaps <- function(dir, bin.type = "zscore",
     dev.off()
 }
 
-# make function summing flexable number of bins
-sumBins <- function(img, bins, bin.rows = TRUE){
-    #if bin.rows F, bin columns
-    ifelse(bin.rows == TRUE,
-           sums <- unname(rowSums(img)),
-           sums <- unname(colSums(img))
-    )
-    as.numeric(lapply(split(sums, cut(seq_along(sums),bins,labels = FALSE)), sum))
-}
-
-# output sums of bins
-imageMatrix2Bins <- function(img, bins, bin.rows = TRUE, drop.rows=NA, drop.cols=NA){
-    sumBins(
-        img = dropRowsCols(img = img, drop.rows = drop.rows, drop.cols = drop.cols),
-        bins = bins,
-        bin.rows = T
-    )
-}
-
-# output measure of realitive movement bins across time series
-imageSeries <- function(
-    dir,pattern = ".raw.csv",bins, bin.rows = TRUE, drop.rows=NA, drop.cols=NA
-){
-    files <- list.files(path = dir(),pattern = pattern,full.names = T)
-    sapply(
-        files, 
-        function(x) {imageMatrix2Bins(img = read.csv(x,header = F), 
-                        bins = bins, bin.rows = bin.rows,
-                        drop.rows = drop.rows,drop.cols = drop.cols)})
-}
-
-countFiles <- function(team.drive.name,folder.name){
-    q.search <- paste0("name contains '",folder.name,"'")
-    folder.id <- as.data.frame(
-        drive_find(team_drive = team.drive.name, q=q.search)$drive_resource,
-        stringsAsFactors = F)$id
-    folder.files <- drive_ls(as_id(folder.id))
-    length(folder.files$name)
-}
-
 
 ###### TO DO #########
-# need to make function to make graphs of activity automaticlly
-#consider changeing binning.jpeg and binning.png to add downsample resolution variable
-# rename to binningJPEG, binningPNG 
-
+# need to make functions to make df's and graphs of activity automaticlly
