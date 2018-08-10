@@ -1,7 +1,4 @@
-
-
 #### DOWNLOAD FOLDER OF FILES FROM GOOGLE TEAM DRIVE ############# ----
-
 teamDriveDownload <- function(team.drive.name, folder.name){
     if(!require("googledrive")) install.packages("googledrive")
     library(googledrive)
@@ -236,7 +233,9 @@ sumRowsOrCols <- function(img, bin.cols = TRUE, drop.rows=NA, drop.cols=NA){
         bin.cols <- 2
     )
     apply(
-        X = dropRowsCols(img = img, drop.rows = drop.rows, drop.cols = drop.cols),
+        X = dropRowsCols(
+            img = data.matrix(img), drop.rows = drop.rows, drop.cols = drop.cols
+        ),
         MARGIN = bin.cols,
         FUN = sum
     )
@@ -256,25 +255,33 @@ AoIs <- function(img, numAoIs){
     )
 }
 
-## NOTE WORKING ##
-# output df of realitive movement in AoIs across time series
-seriesAoIs()oIs <- function( dir, pattern = ".raw.csv", numAoIs,
-                        bin.cols = TRUE, drop.rows=NA, drop.cols=NA) 
-{
+## NOT WORKING ##
+seriesAoIs <- function( 
+    dir, pattern = ".raw.csv", numAoIs, bin.cols = TRUE,
+    drop.rows=NA, drop.cols=NA, bin.names=c("left","right"), time.intervals=NA
+) {
+    array.of.sums <- NULL
     images <- list.files(path = dir,pattern = pattern,full.names = T)
-    image.files <- lapply(images, read.csv, header = FALSE,sep = ",")
-    sapply(
-        images,
-        FUN =  function(x){
-            (AoIs(
-                sumRowsOrCols(
-                    img = t(image.files), bin.cols = bin.cols, 
-                    drop.rows = drop.rows, drop.cols = drop.cols
-                ),
-                numAoIs = numAoIs
-            ))
-        }
+    for (image in images) {
+        img <- read.csv(
+            dropRowsCols(image,drop.rows = drop.rows,drop.cols = drop.cols), 
+            header = F,sep = ","
+        )
+        bin.sums <- AoIs(
+            sumRowsOrCols(
+                img = img,
+                bin.cols = bin.cols),
+            numAoIs = numAoIs
+        )
+        array.of.sums <- rbind.data.frame(array.of.sums,t(bin.sums))
+    }
+    ifelse(
+        is.na(time.intervals),
+        rownames(array.of.sums) <- 1:nrow(array.of.sums),
+        rownames(array.of.sums) <- time.intervals
     )
+    array.of.sums <- rbind.data.frame(bins=c(bin.names),array.of.sums)
+    t(array.of.sums)
 }
 
 #### MAKE VISUALIZATIONS FROM ANALYZED SERIAL IMAGES ############# ----
@@ -318,6 +325,17 @@ makeHeatmaps <- function(dir, bin.type = "zscore",file.prefix="heatmap.",
     dev.off()
 }
 
-###### TO DO #########
-# need to make functions to make df's and graphs of activity automaticlly
+makeGraph <- function(
+    df.of.sums, pdf.name="graphs.pdf"
+){
+    pdf(file = pdf.name,height = 11,width = 8.5)
+    par()
+    #make total movement graph----
+    colSums(df.of.sums[,-1])
+    #make movement in each bin graph----
+    #make fraction of movement in each bin graph----
+    dev.off()
+}
 
+###### TO DO #########
+# need to make functions to make graphs of activity automaticlly
