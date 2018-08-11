@@ -19,7 +19,18 @@ countFiles <- function(team.drive.name,folder.name){
     folder.files <- drive_ls(as_id(folder.id))
     length(folder.files$name)
 }
+           
+teamDriveDownload.frames <- function(team.drive.name,folder.name,frames=c(1:2000)){
+  dir.create(paste0(folder.name,"\\images"),recursive = TRUE,)
+  setwd(paste0(folder.name,"\\images"))
+  q.search <- paste0("name contains '",folder.name,"'")
+  team.drive.name <- team.drive.name
 
+  folder.id <- as.data.frame(drive_find(team_drive = team.drive.name, q=q.search)$drive_resource,
+                             stringsAsFactors = F)$id
+  folder.files <- drive_ls(as_id(folder.id))
+  lapply(folder.files$id[frames], function(x) drive_download(as_id(x),overwrite = T))
+}
 #### PROCESSING IMAGES AFTER DOWNLOADING ############# ----
 
 #function to drop rows & columns in data frame
