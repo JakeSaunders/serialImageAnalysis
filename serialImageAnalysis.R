@@ -226,6 +226,7 @@ filterNoise <- function(dir, pattern = "raw.csv", filter.radius = 1,out.dir="bin
             data.matrix(read.csv(file,header = F,sep = ","))
             ,size = filter.radius)
         )
+        print(paste0("saving ",out.dir,sub(pattern = dir,replacement = "",file)))
         write.table(
             img,
             paste0(out.dir,sub(pattern = dir,replacement = "",file)),
